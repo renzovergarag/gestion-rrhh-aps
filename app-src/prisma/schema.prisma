@@ -1,0 +1,387 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// CENTROS DE SALUD
+// ─────────────────────────────────────────────
+
+model HealthCenter {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(200)
+  code      String   @unique @db.VarChar(50)
+  commune   String   @db.VarChar(100)
+  region    String   @db.VarChar(100)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users           User[]
+  professionals   Professional[]
+  activities      Activity[]
+  surveys         Survey[]
+  meetings        Meeting[]
+  holidays        Holiday[]
+  workConfigs     WorkConfig[]
+  consolidations  ConsolidationReport[]
+
+  @@index([code])
+  @@map("health_centers")
+}
+
+// ─────────────────────────────────────────────
+// AUTENTICACIÓN Y ROLES
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN_CENTRO
+  PROFESIONAL
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique @db.VarChar(255)
+  emailVerified  DateTime?
+  name           String?   @db.VarChar(200)
+  image          String?   @db.VarChar(500)
+  role           UserRole  @default(PROFESIONAL)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  healthCenterId String?
+  healthCenter   HealthCenter? @relation(fields: [healthCenterId], references: [id])
+
+  professional   Professional?
+
+  accounts       Account[]
+  sessions       Session[]
+
+  @@index([email])
+  @@index([healthCenterId])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String  @db.VarChar(100)
+  provider          String  @db.VarChar(100)
+  providerAccountId String  @db.VarChar(255)
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String? @db.VarChar(50)
+  scope             String? @db.VarChar(500)
+  id_token          String? @db.Text
+  session_state     String? @db.VarChar(500)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @db.VarChar(500)
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String   @db.VarChar(255)
+  token      String   @unique @db.VarChar(500)
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─────────────────────────────────────────────
+// GESTIÓN DE PERSONAL
+// ─────────────────────────────────────────────
+
+enum ContractType {
+  JORNADA_COMPLETA
+  MEDIA_JORNADA
+  TRES_CUARTOS
+  OTRO
+}
+
+enum ProfessionalCategory {
+  MEDICO
+  ENFERMERA
+  MATRONA
+  KINESIOLOGO
+  PSICOLOGO
+  NUTRICIONISTA
+  ASISTENTE_SOCIAL
+  TENS
+  TECNICO_PARAMEDICO
+  ADMINISTRATIVO
+  OTRO
+}
+
+model Professional {
+  id           String               @id @default(cuid())
+  rut          String               @db.VarChar(20)
+  firstName    String               @db.VarChar(100)
+  lastName     String               @db.VarChar(100)
+  category     ProfessionalCategory
+  contractType ContractType
+  weeklyHours  Float
+  startDate    DateTime
+  isActive     Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  healthCenterId String
+  healthCenter   HealthCenter @relation(fields: [healthCenterId], references: [id])
+
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id])
+
+  workConfigs    WorkConfig[]
+  surveys        Survey[]
+  participations MeetingParticipant[]
+  consolidations ConsolidationReport[]
+
+  @@unique([rut, healthCenterId])
+  @@index([healthCenterId])
+  @@index([category])
+  @@map("professionals")
+}
+
+// ─────────────────────────────────────────────
+// CONFIGURACIÓN DE DISPONIBILIDAD TEÓRICA
+// ─────────────────────────────────────────────
+
+model WorkConfig {
+  id                   String   @id @default(cuid())
+  year                 Int
+  theoreticalHoursYear Float
+  holidayDays          Int      @default(0)
+  adminDays            Int      @default(0)
+  vacationDays         Int      @default(0)
+  sickLeaveDays        Int      @default(0)
+  otherAbsenceDays     Int      @default(0)
+  availableHoursYear   Float
+  availableHoursWeek   Float
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  healthCenterId String
+  healthCenter   HealthCenter @relation(fields: [healthCenterId], references: [id])
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id])
+
+  @@unique([professionalId, year])
+  @@index([healthCenterId, year])
+  @@map("work_configs")
+}
+
+// ─────────────────────────────────────────────
+// CATÁLOGO DE ACTIVIDADES
+// Nota MySQL: applicableCategories como Json (MySQL no soporta arrays nativos)
+// ─────────────────────────────────────────────
+
+enum ActivityPillar {
+  GESTION
+  REUNION
+  DERECHO
+}
+
+model Activity {
+  id           String         @id @default(cuid())
+  name         String         @db.VarChar(200)
+  code         String         @db.VarChar(50)
+  pillar       ActivityPillar
+  description  String?        @db.VarChar(500)
+  isObligatory Boolean        @default(false)
+  isActive     Boolean        @default(true)
+  order        Int            @default(0)
+  // MySQL: almacenamos como JSON array de strings ej: ["MEDICO","ENFERMERA"]
+  applicableCategories Json   @default("[]")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  healthCenterId String?
+  healthCenter   HealthCenter? @relation(fields: [healthCenterId], references: [id])
+
+  surveyItems SurveyItem[]
+
+  @@unique([code, healthCenterId])
+  @@index([healthCenterId, pillar])
+  @@map("activities")
+}
+
+// ─────────────────────────────────────────────
+// ENCUESTAS SEMANALES
+// ─────────────────────────────────────────────
+
+enum SurveyStatus {
+  BORRADOR
+  ENVIADA
+  APROBADA
+  RECHAZADA
+}
+
+model Survey {
+  id            String       @id @default(cuid())
+  weekNumber    Int
+  year          Int
+  weekStartDate DateTime
+  weekEndDate   DateTime
+  status        SurveyStatus @default(BORRADOR)
+  notes         String?      @db.VarChar(1000)
+  submittedAt   DateTime?
+  approvedAt    DateTime?
+  approvedBy    String?      @db.VarChar(50)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  healthCenterId String
+  healthCenter   HealthCenter @relation(fields: [healthCenterId], references: [id])
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id])
+
+  items SurveyItem[]
+
+  @@unique([professionalId, weekNumber, year])
+  @@index([healthCenterId, year, weekNumber])
+  @@index([professionalId, year])
+  @@map("surveys")
+}
+
+model SurveyItem {
+  id          String   @id @default(cuid())
+  weeklyHours Float
+  notes       String?  @db.VarChar(500)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  surveyId   String
+  survey     Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id])
+
+  @@unique([surveyId, activityId])
+  @@index([surveyId])
+  @@map("survey_items")
+}
+
+// ─────────────────────────────────────────────
+// CONSOLIDACIÓN HC/HNC
+// Nota MySQL: @@unique con campos nullable usa valor centinela -1
+// ─────────────────────────────────────────────
+
+model ConsolidationReport {
+  id              String   @id @default(cuid())
+  year            Int
+  // -1 = reporte anual (sin mes específico)
+  month           Int      @default(-1)
+  // -1 = reporte mensual/anual
+  weekNumber      Int      @default(-1)
+  contractedHours Float
+  hncGestion      Float    @default(0)
+  hncReunion      Float    @default(0)
+  hncDerecho      Float    @default(0)
+  hncTotal        Float    @default(0)
+  hcTotal         Float    @default(0)
+  hncPercentage   Float    @default(0)
+  hcPercentage    Float    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  healthCenterId String
+  healthCenter   HealthCenter @relation(fields: [healthCenterId], references: [id])
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id])
+
+  @@unique([professionalId, year, month, weekNumber])
+  @@index([healthCenterId, year])
+  @@map("consolidation_reports")
+}
+
+// ─────────────────────────────────────────────
+// CALENDARIO DE REUNIONES
+// ─────────────────────────────────────────────
+
+enum MeetingStatus {
+  PROGRAMADA
+  REALIZADA
+  CANCELADA
+  POSTERGADA
+}
+
+model Meeting {
+  id             String        @id @default(cuid())
+  title          String        @db.VarChar(200)
+  description    String?       @db.VarChar(1000)
+  startDatetime  DateTime
+  endDatetime    DateTime
+  duration       Float
+  isRecurrent    Boolean       @default(false)
+  recurrenceRule String?       @db.VarChar(500)
+  status         MeetingStatus @default(PROGRAMADA)
+  location       String?       @db.VarChar(200)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  healthCenterId String
+  healthCenter   HealthCenter @relation(fields: [healthCenterId], references: [id])
+
+  participants MeetingParticipant[]
+
+  @@index([healthCenterId, startDatetime])
+  @@map("meetings")
+}
+
+model MeetingParticipant {
+  id           String    @id @default(cuid())
+  isOrganizer  Boolean   @default(false)
+  confirmedAt  DateTime?
+
+  meetingId      String
+  meeting        Meeting      @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id])
+
+  @@unique([meetingId, professionalId])
+  @@map("meeting_participants")
+}
+
+// ─────────────────────────────────────────────
+// FERIADOS Y AUSENCIAS LEGALES
+// ─────────────────────────────────────────────
+
+enum HolidayType {
+  FERIADO_NACIONAL
+  FERIADO_REGIONAL
+  DIA_ADMINISTRATIVO
+  OTRO
+}
+
+model Holiday {
+  id             String      @id @default(cuid())
+  name           String      @db.VarChar(200)
+  date           DateTime
+  type           HolidayType
+  year           Int
+  createdAt      DateTime    @default(now())
+
+  healthCenterId String?
+  healthCenter   HealthCenter? @relation(fields: [healthCenterId], references: [id])
+
+  @@index([year, healthCenterId])
+  @@map("holidays")
+}
