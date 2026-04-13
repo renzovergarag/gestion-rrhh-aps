@@ -75,7 +75,7 @@ model Professional {
   healthCenterId String
   userId        String?   @unique
   name          String
-  rut           String
+  rut           String    @unique
   position      String
   category      Category
   weeklyHours   Float
@@ -111,6 +111,7 @@ model Activity {
 
   @@index([healthCenterId])
   @@index([code])
+  @@unique([healthCenterId, code])
 }
 
 model Survey {
