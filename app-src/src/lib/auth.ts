@@ -40,7 +40,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     name: user.name,
                     role: user.role,
                     healthCenterId: user.healthCenterId,
-                    healthCenterName: user.healthCenter?.name,
+                    healthCenterName: user.healthCenter?.name || null,
                 };
             },
         }),

@@ -146,7 +146,8 @@ async function main() {
     console.log(`  - ${profesional.email} (PROFESIONAL)`);
 
     console.log("\nCreando profesionales de ejemplo...");
-    const sampleProfessionals = [
+    type CategoryType = "CAT_A" | "CAT_B" | "CAT_C" | "CAT_D";
+    const sampleProfessionals: { name: string; rut: string; position: string; category: CategoryType; weeklyHours: number }[] = [
         {
             name: "Juan Pablo Aceituno Jara",
             rut: "12345678-9",

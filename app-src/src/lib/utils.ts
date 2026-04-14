@@ -21,6 +21,10 @@ export function getWeekNumber(date: Date): number {
     return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 }
 
+export function getCurrentWeekNumber(): number {
+    return getWeekNumber(new Date());
+}
+
 export function getYearWeek(date: Date): { year: number; week: number } {
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     const dayNum = d.getUTCDay() || 7;

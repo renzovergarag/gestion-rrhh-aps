@@ -8,24 +8,24 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { ZodError } from 'zod';
 
-function getSessionOrThrow() {
-    const session = auth();
+async function getSessionOrThrow() {
+    const session = await auth();
     if (!session?.user) {
         throw new Error('No autenticado');
     }
     return session;
 }
 
-function checkSuperAdmin() {
-    const session = getSessionOrThrow();
+async function checkSuperAdmin() {
+    const session = await getSessionOrThrow();
     if (session.user.role !== 'SUPER_ADMIN') {
         throw new Error('Acceso denegado: se requiere Super Admin');
     }
     return session;
 }
 
-function checkAdminCentro() {
-    const session = getSessionOrThrow();
+async function checkAdminCentro() {
+    const session = await getSessionOrThrow();
     if (!['SUPER_ADMIN', 'ADMIN_CENTRO'].includes(session.user.role)) {
         throw new Error('Acceso denegado: se requiere Admin de Centro');
     }
@@ -56,7 +56,7 @@ export async function loginAction(formData: FormData) {
         redirect('/admin/centro');
     } catch (error) {
         if (error instanceof ZodError) {
-            return { error: error.errors[0].message };
+            return { error: error.issues[0].message };
         }
         if (error instanceof Error && error.message === 'NEXT_REDIRECT') {
             throw error;
@@ -67,7 +67,7 @@ export async function loginAction(formData: FormData) {
 
 export async function registerAction(formData: FormData) {
     try {
-        const session = getSessionOrThrow();
+        const session = await getSessionOrThrow();
 
         if (session.user.role !== 'SUPER_ADMIN') {
             return { error: 'Solo Super Admin puede crear usuarios' };
@@ -102,7 +102,7 @@ export async function registerAction(formData: FormData) {
         return { success: true };
     } catch (error) {
         if (error instanceof ZodError) {
-            return { error: error.errors[0].message };
+            return { error: error.issues[0].message };
         }
         if (error instanceof Error && error.message === 'NEXT_REDIRECT') {
             throw error;
@@ -113,7 +113,7 @@ export async function registerAction(formData: FormData) {
 
 export async function createHealthCenterAction(formData: FormData) {
     try {
-        checkSuperAdmin();
+        await checkSuperAdmin();
 
         const data = healthCenterSchema.parse({
             name: formData.get('name'),
@@ -136,7 +136,7 @@ export async function createHealthCenterAction(formData: FormData) {
         return { success: true };
     } catch (error) {
         if (error instanceof ZodError) {
-            return { error: error.errors[0].message };
+            return { error: error.issues[0].message };
         }
         return { error: 'Error interno del servidor' };
     }
@@ -144,7 +144,7 @@ export async function createHealthCenterAction(formData: FormData) {
 
 export async function updateHealthCenterAction(id: string, formData: FormData) {
     try {
-        checkSuperAdmin();
+        await checkSuperAdmin();
 
         const data = healthCenterSchema.parse({
             name: formData.get('name'),
@@ -163,7 +163,7 @@ export async function updateHealthCenterAction(id: string, formData: FormData) {
         return { success: true };
     } catch (error) {
         if (error instanceof ZodError) {
-            return { error: error.errors[0].message };
+            return { error: error.issues[0].message };
         }
         return { error: 'Error interno del servidor' };
     }
@@ -171,7 +171,7 @@ export async function updateHealthCenterAction(id: string, formData: FormData) {
 
 export async function deleteHealthCenterAction(id: string) {
     try {
-        checkSuperAdmin();
+        await checkSuperAdmin();
         await prisma.healthCenter.delete({ where: { id } });
         revalidatePath('/admin/global');
         return { success: true };
@@ -182,7 +182,7 @@ export async function deleteHealthCenterAction(id: string) {
 
 export async function createProfessionalAction(formData: FormData) {
     try {
-        const session = checkAdminCentro();
+        const session = await checkAdminCentro();
 
         const data = professionalSchema.parse({
             name: formData.get('name'),
@@ -217,7 +217,7 @@ export async function createProfessionalAction(formData: FormData) {
         return { success: true };
     } catch (error) {
         if (error instanceof ZodError) {
-            return { error: error.errors[0].message };
+            return { error: error.issues[0].message };
         }
         return { error: 'Error interno del servidor' };
     }
@@ -225,7 +225,7 @@ export async function createProfessionalAction(formData: FormData) {
 
 export async function updateProfessionalAction(id: string, formData: FormData) {
     try {
-        checkAdminCentro();
+        await checkAdminCentro();
 
         const data = professionalSchema.parse({
             name: formData.get('name'),
@@ -246,7 +246,7 @@ export async function updateProfessionalAction(id: string, formData: FormData) {
         return { success: true };
     } catch (error) {
         if (error instanceof ZodError) {
-            return { error: error.errors[0].message };
+            return { error: error.issues[0].message };
         }
         return { error: 'Error interno del servidor' };
     }
@@ -254,7 +254,7 @@ export async function updateProfessionalAction(id: string, formData: FormData) {
 
 export async function deleteProfessionalAction(id: string) {
     try {
-        checkAdminCentro();
+        await checkAdminCentro();
         await prisma.professional.delete({ where: { id } });
         revalidatePath('/admin/centro');
         return { success: true };
@@ -265,7 +265,7 @@ export async function deleteProfessionalAction(id: string) {
 
 export async function createActivityAction(formData: FormData) {
     try {
-        const session = checkAdminCentro();
+        const session = await checkAdminCentro();
 
         const appliesToRaw = formData.get('appliesTo');
         const appliesTo = typeof appliesToRaw === 'string' ? JSON.parse(appliesToRaw) : [];
@@ -289,6 +289,7 @@ export async function createActivityAction(formData: FormData) {
         await prisma.activity.create({
             data: {
                 ...data,
+                appliesTo: JSON.stringify(data.appliesTo),
                 healthCenterId: healthCenterId as string,
             },
         });
@@ -297,7 +298,7 @@ export async function createActivityAction(formData: FormData) {
         return { success: true };
     } catch (error) {
         if (error instanceof ZodError) {
-            return { error: error.errors[0].message };
+            return { error: error.issues[0].message };
         }
         return { error: 'Error interno del servidor' };
     }
@@ -305,7 +306,7 @@ export async function createActivityAction(formData: FormData) {
 
 export async function updateActivityAction(id: string, formData: FormData) {
     try {
-        checkAdminCentro();
+        await checkAdminCentro();
 
         const appliesToRaw = formData.get('appliesTo');
         const appliesTo = typeof appliesToRaw === 'string' ? JSON.parse(appliesToRaw) : [];
@@ -323,14 +324,17 @@ export async function updateActivityAction(id: string, formData: FormData) {
 
         await prisma.activity.update({
             where: { id },
-            data,
+            data: {
+                ...data,
+                appliesTo: JSON.stringify(data.appliesTo),
+            },
         });
 
         revalidatePath('/admin/centro');
         return { success: true };
     } catch (error) {
         if (error instanceof ZodError) {
-            return { error: error.errors[0].message };
+            return { error: error.issues[0].message };
         }
         return { error: 'Error interno del servidor' };
     }
@@ -338,7 +342,7 @@ export async function updateActivityAction(id: string, formData: FormData) {
 
 export async function deleteActivityAction(id: string) {
     try {
-        checkAdminCentro();
+        await checkAdminCentro();
         await prisma.activity.delete({ where: { id } });
         revalidatePath('/admin/centro');
         return { success: true };
@@ -349,7 +353,7 @@ export async function deleteActivityAction(id: string) {
 
 export async function createSurveyAction(formData: FormData) {
     try {
-        const session = checkAdminCentro();
+        const session = await checkAdminCentro();
 
         const entriesRaw = formData.get('entries');
         const entries = typeof entriesRaw === 'string' ? JSON.parse(entriesRaw) : [];
@@ -405,7 +409,7 @@ export async function createSurveyAction(formData: FormData) {
         return { success: true };
     } catch (error) {
         if (error instanceof ZodError) {
-            return { error: error.errors[0].message };
+            return { error: error.issues[0].message };
         }
         return { error: 'Error interno del servidor' };
     }
@@ -413,7 +417,7 @@ export async function createSurveyAction(formData: FormData) {
 
 export async function submitSurveyAction(id: string) {
     try {
-        checkAdminCentro();
+        await checkAdminCentro();
 
         const survey = await prisma.survey.findUnique({
             where: { id },
@@ -437,6 +441,54 @@ export async function submitSurveyAction(id: string) {
         revalidatePath('/admin/centro');
         return { success: true };
     } catch {
+        return { error: 'Error interno del servidor' };
+    }
+}
+
+export async function updateSurveyAction(id: string, formData: FormData) {
+    try {
+        const session = await checkAdminCentro();
+
+        const entriesRaw = formData.get('entries');
+        const entries = typeof entriesRaw === 'string' ? JSON.parse(entriesRaw) : [];
+
+        const data = surveySchema.parse({
+            professionalId: formData.get('professionalId'),
+            year: parseInt(formData.get('year') as string),
+            week: parseInt(formData.get('week') as string),
+            entries,
+        });
+
+        const survey = await prisma.survey.findUnique({
+            where: { id },
+            include: { professional: true },
+        });
+
+        if (!survey) {
+            return { error: 'Encuesta no encontrada' };
+        }
+
+        const totalHours = entries.reduce((sum: number, e: { hours: number }) => sum + e.hours, 0);
+        if (totalHours > survey.professional.weeklyHours) {
+            return { error: `Las horas totales (${totalHours}) exceden la jornada (${survey.professional.weeklyHours})` };
+        }
+
+        await prisma.surveyEntry.deleteMany({ where: { surveyId: id } });
+
+        await prisma.surveyEntry.createMany({
+            data: entries.map((e: { activityId: string; hours: number }) => ({
+                surveyId: id,
+                activityId: e.activityId,
+                hours: e.hours,
+            })),
+        });
+
+        revalidatePath('/admin/centro');
+        return { success: true };
+    } catch (error) {
+        if (error instanceof ZodError) {
+            return { error: error.issues[0].message };
+        }
         return { error: 'Error interno del servidor' };
     }
 }

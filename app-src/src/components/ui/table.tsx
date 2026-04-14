@@ -29,6 +29,6 @@ export function TableHead({ children, className }: TableProps) {
     return <th className={cn('px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500', className)}>{children}</th>;
 }
 
-export function TableCell({ children, className }: TableProps) {
-    return <td className={cn('whitespace-nowrap px-4 py-3 text-sm', className)}>{children}</td>;
+export function TableCell({ children, className, ...props }: TableProps & { colSpan?: number }) {
+    return <td className={cn('whitespace-nowrap px-4 py-3 text-sm', className)} {...props}>{children}</td>;
 }
